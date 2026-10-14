@@ -1,0 +1,65 @@
+# Usage:
+# 1. Make this .py file then Flash the Daisy with the build
+# 2. Unplug the Daisy from USB
+# 3. Run this script - it will print "Plug in Daisy" and retry until connected.
+# 4. Plug the Daisy back in. It auto-captures and saves to audio.csv.
+
+import serial
+import csv
+import time
+import numpy as np
+
+PORT = "COM6"
+BAUD = 115200
+
+def open_port():
+    while True:
+        try:
+            ser = serial.Serial(PORT, BAUD, timeout=2)
+            ser.reset_input_buffer()
+            print("Connected to", PORT)
+            return ser
+        except serial.SerialException:
+            print("Plug in Daisy")
+            time.sleep(0.5)
+
+def read_until_begin(ser):
+    while True:
+        line = ser.readline().decode("utf-8", errors="ignore").strip()
+        if line:
+            print("DAISY:", line)
+        if line == "BEGIN":
+            print("Capture started")
+            return
+
+def read_samples(ser):
+    samples = []
+
+    while True:
+        line = ser.readline().decode("utf-8", errors="ignore").strip()
+        if line == "END":
+            print("Capture finished")
+            break
+        try:
+            samples.append(float(line) / 1e6)
+        except ValueError:
+            pass
+    return np.array(samples)
+
+def save_CSV(samples):
+    # Save CSV
+    with open("SPH0645_6000Hz.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Sample"])
+        for s in samples:
+            writer.writerow([s])
+    print("Saved audio")
+
+#Main
+ser = open_port()
+read_until_begin(ser)
+samples = read_samples(ser)
+print(f"Received {len(samples)} samples")
+save_CSV(samples)
+ser.close()
+print("Done")
